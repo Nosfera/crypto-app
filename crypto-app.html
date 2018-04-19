@@ -1,14 +1,81 @@
 <link rel="import" href="/bower_components/polymer/polymer.html">
+<link rel="import" href="/bower_components/iron-ajax/iron-ajax.html">
 <dom-module id="crypto-app">
     <template>
         <h2>hi there</h2>
+        <iron-ajax id="coinbase" handle-as="json" on-response="_handleResponse"></iron-ajax>
     </template>
+
     <script>
         class CryptoApp extends Polymer.Element {
             static get is() {
                 return 'crypto-app'
             }
+            /* 
+            var myHonda = {
+                color: 'red', 
+                wheels: 4,
+                engine: {
+                   cylinders: 4, 
+                   size: 2.2
+               }
+            };
+            */
+            static get properties() {
+                return {
+                    currencies: {
+                        type: Array,
+                        value: [
+                            {code: 'BTC',
+                            name: 'Bitcoin'},
+                            {code: 'ETH',
+                            name: 'Ethereum'},
+                            {code: 'LTC',
+                            name: 'Litecoin'}
+                        ]
+                    }
+                }
+            }
+            // on READY
+            ready() {
+                super.ready();
+
+                // RenderStatus: Module for scheduling flushable pre-render and post-render tasks.
+                // This method is useful for tuning the first-render performance of an element or 
+                // application by deferring non-critical work until after the first paint.
+                
+                // this trigger the _getCurrencyData function once the RenderStatus.after
+                // is setup
+                Polymer.RenderStatus.afterNextRender(this, function () {
+                    this._getCurrencyData();
+                })
+            }
+
+            // AJAX get
+            _getCurrencyData() {
+                // id from the component Ajax
+                var ajax = this.$.coinbase;
+                // properties of the module
+                // array with type of currencies
+                var currencies = this.currencies;
+                // array iteration based on 'elements'
+                // from this model
+                currencies.forEach(function (element){ 
+                    ajax.url = 'https://www.coinbase.com/api/v2/prices/' + element.code +
+                        '-USD/spot?';
+                    // creating request
+                    ajax.generateRequest();
+                    // then the response is handled by the iron-ajax element
+                });
+            }
+            // this just consol.log iron-ajax resposponse
+            //  ... on-response="_handleResponse"> </iron-ajax>
+            _handleResponse(response) {
+                console.log(response);
+            }
         }
+
         window.customElements.define(CryptoApp.is, CryptoApp);
     </script>
+
 </dom-module>
