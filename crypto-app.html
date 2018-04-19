@@ -1,0 +1,14 @@
+<link rel="import" href="/bower_components/polymer/polymer.html">
+<dom-module id="crypto-app">
+    <template>
+        <h2>hi there</h2>
+    </template>
+    <script>
+        class CryptoApp extends Polymer.Element {
+            static get is() {
+                return 'crypto-app'
+            }
+        }
+        window.customElements.define(CryptoApp.is, CryptoApp);
+    </script>
+</dom-module>
