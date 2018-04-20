@@ -1,9 +1,24 @@
 <link rel="import" href="/bower_components/polymer/polymer.html">
 <link rel="import" href="/bower_components/iron-ajax/iron-ajax.html">
+<link rel="import" href="/bower_components/paper-spinner/paper-spinner.html">
+<link rel="import" href="/bower_components/paper-spinner/paper-spinner-lite.html">
+<script src="/bower_components/chart.js/dist/Chart.js"></script>
+<script src="/bower_components/moment/min/moment.min.js"></script>
+
 <dom-module id="crypto-app">
     <template>
         <h2>hi there</h2>
-        <iron-ajax id="coinbase" handle-as="json" on-response="_handleResponse"></iron-ajax>
+        <iron-ajax id="coinbase" handle-as="json" on-response="_handleResponse" loading="{{loading}}"></iron-ajax>
+        <paper-spinner-lite active="[[loading]]"></paper-spinner-lite>
+        <div hidden$="[[loading]]">
+            <template is="dom-repeat" items="[[currencies]]">
+                <p>[[item.codeName]] - [[item.name]]. Price: [[item.price]]</p>
+            </template>
+        </div>
+        <!-- div for the charts -->
+        <div hidden$="[[loading]]" style="width:100%; max-width: 700px; margin:0 auto">
+            <canvas height="2" width="4" id="canvas"></canvas>
+        </div>
     </template>
 
     <script>
@@ -25,14 +40,30 @@
                 return {
                     currencies: {
                         type: Array,
-                        value: [
-                            {code: 'BTC',
-                            name: 'Bitcoin'},
-                            {code: 'ETH',
-                            name: 'Ethereum'},
-                            {code: 'LTC',
-                            name: 'Litecoin'}
+                        value: [{
+                                codeName: 'BTC',
+                                name: 'Bitcoin',
+                                price: 0
+                            },
+                            {
+                                codeName: 'ETH',
+                                name: 'Ethereum',
+                                price: 1
+                            },
+                            {
+                                codeName: 'LTC',
+                                name: 'Litecoin',
+                                price: 2
+                            }
                         ]
+                    },
+                    loading: {
+                        type: Boolean,
+                        notify: true,
+                        value: false
+                    },
+                    myLineChart: {
+
                     }
                 }
             }
@@ -43,35 +74,180 @@
                 // RenderStatus: Module for scheduling flushable pre-render and post-render tasks.
                 // This method is useful for tuning the first-render performance of an element or 
                 // application by deferring non-critical work until after the first paint.
-                
+
                 // this trigger the _getCurrencyData function once the RenderStatus.after
                 // is setup
                 Polymer.RenderStatus.afterNextRender(this, function () {
                     this._getCurrencyData();
+                    this._getCurrencyHistoricData('BTC');
                 })
             }
+            _getCurrencyHistoricData(currency) {
+                var ajax = this.$.coinbase;
+                ajax.url = 'https://www.coinbase.com/api/v2/prices/' + currency + '-USD/historic?period=week';
+                ajax.generateRequest();
+            }
 
-            // AJAX get
+            // AJAX generate Request
             _getCurrencyData() {
                 // id from the component Ajax
                 var ajax = this.$.coinbase;
+
                 // properties of the module
-                // array with type of currencies
+                // array with type, name and value of currencies
                 var currencies = this.currencies;
-                // array iteration based on 'elements'
-                // from this model
-                currencies.forEach(function (element){ 
-                    ajax.url = 'https://www.coinbase.com/api/v2/prices/' + element.code +
-                        '-USD/spot?';
-                    // creating request
-                    ajax.generateRequest();
-                    // then the response is handled by the iron-ajax element
-                });
+
+                console.log("----'Properties model, currency code name'-------")
+                console.log(currencies);
+                /*
+                    0: {codeName: "BTC", name: "Bitcoin", price: 0}
+                    1: {codeName: "ETH", name: "Ethereum", price: 1}
+                    2: {codeName: "LTC", name: "Litecoin", price: 2}
+                */
+
+                // Generate an URL ajax request from each currency, using its codeName on the array
+                currencies.forEach(
+                    function (element) {
+                        ajax.url = 'https://www.coinbase.com/api/v2/prices/' + element.codeName +
+                            '-USD/spot?';
+                        // executing request
+                        ajax.generateRequest();
+                        // then the response is handled by the iron-ajax element
+                    }, this);
+
             }
-            // this just consol.log iron-ajax resposponse
+
             //  ... on-response="_handleResponse"> </iron-ajax>
             _handleResponse(response) {
-                console.log(response);
+
+                //  detailedResponse = <iron-request></iron-request>
+                var detailedResponse = response.detail;
+                // It handles responses for historic and
+                // per currency data: hack--> check if ajax has amount
+                // if true is one currency; if false then is historic.
+                if (detailedResponse.response.data.amount != null) {
+                    this._computeCurrencyPrice(detailedResponse);
+                } else {
+                    this._computeGraph(detailedResponse);
+                }
+
+                // console.log("----'Event response:'-------")
+                // console.log(response);
+            }
+
+            _computeCurrencyPrice(response) {
+
+                //<iron-request></iron-request>.url
+                var responseURL = response.url;
+
+                // var code = substract the type of currency code from url
+                var code = responseURL.substring(39, 42);
+                console.log(" URLSubstring, AKA codeName " + code)
+
+                // Find index, AKA position on ARRAY, that match our properties.currencies.value[{code:'codename'}] --> code:
+                var index = this.currencies.map(function (e) {
+                    return e.codeName;
+                }).indexOf(code);
+                console.log("this index: " + index + " , corresponds to currency codeName:" + code);
+
+                // inject amount into array: make it observable
+                console.log("inject data found in response to our model: " + response.response.data.amount);
+                var oldValue = this.get('currencies.' + index + '.price');
+                console.log("   previous data in our model: " + oldValue);
+                console.log("   -> current data in our model: " + response.response.data.amount);
+                this.set('currencies.' + index + '.price', response.response.data.amount);
+
+
+            }
+    
+            _computeGraph(response) {
+                //<iron-request></iron-request>.url
+                var responseURL = response.url;
+
+                // var code = substract the type of currency code from url
+                var code = responseURL.substring(39, 42);
+                var label = [];
+                var price = [];
+                // check time format
+                
+                response.response.data.prices.forEach(
+                    function(element) {
+                        // label.push(element.time);
+                        price.push(element.price);
+                        label.push(this._computeDateTime(element.time));
+
+                    }, this);
+                this._generateLineChart(label, price, code);
+            }
+
+            _computeDateTime(datestring){
+                if (datestring){
+                    return moment(datestring).startOf('hour').fromNow(); 
+                    //return moment(datestring, "YY-MM-DDThh:mm:aaZ" ).format('MMMM Do YYYY, h:mm:ss a');
+                }
+                return datestring;
+            }
+
+            _generateLineChart(label, price, labelName) {
+                // check if already exist a chart and destroy to avoid many
+                // chart loading one on top of the other.
+                if (this.myLineChart !== undefined) this.myLineChart.destroy();
+
+                // find the canvas on the DOM
+                var ctx = this.$.canvas.getContext('2d');
+
+                // create and instance of chart.js and push data onto the chart
+                this.myLineChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: label,
+                        datasets: [
+                            {
+                            pointRadius: 0,
+                            label: labelName,
+                            data: price,
+                            backgroundColor: [
+                                'rgba(255, 99, 132, 0.2)',
+                                'rgba(54, 162, 235, 0.2)',
+                                'rgba(255, 206, 86, 0.2)',
+                                'rgba(75, 192, 192, 0.2)',
+                                'rgba(153, 102, 255, 0.2)',
+                                'rgba(255, 159, 64, 0.2)'
+                            ],
+                            borderWidth: 2,
+                            borderColor: [
+                                'rgba(255,99,132,1)',
+                                'rgba(54, 162, 235, 1)',
+                                'rgba(255, 206, 86, 1)',
+                                'rgba(75, 192, 192, 1)',
+                                'rgba(153, 102, 255, 1)',
+                                'rgba(255, 159, 64, 1)'
+                            ],
+                            borderWidth: 1,
+                    
+
+                        }]
+                    },
+                    options:{
+                                animation:false,
+                                tooltips: {
+                                    mode: 'index',
+                                    intersect: false
+                                },
+                                scales: {
+                                    xAxes:[{
+                                        gridLines: {
+                                            display:false
+                                        }
+                                    }],
+                                    yAxes:[{
+                                        gridLines: {
+                                            display:false
+                                        }
+                                    }]
+                                }
+                            }
+                });
             }
         }
 
