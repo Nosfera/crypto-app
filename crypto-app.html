@@ -2,22 +2,57 @@
 <link rel="import" href="/bower_components/iron-ajax/iron-ajax.html">
 <link rel="import" href="/bower_components/paper-spinner/paper-spinner.html">
 <link rel="import" href="/bower_components/paper-spinner/paper-spinner-lite.html">
+<link rel="import" href="/bower_components/paper-button/paper-button.html">
+<link rel="import" href="/bower_components/paper-styles/classes/typography.html">
+<link rel="import" href="/bower_components/iron-flex-layout/iron-flex-layout.html">
+<link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+
 <script src="/bower_components/chart.js/dist/Chart.js"></script>
 <script src="/bower_components/moment/min/moment.min.js"></script>
 
 <dom-module id="crypto-app">
     <template>
-        <h2>hi there</h2>
-        <iron-ajax id="coinbase" handle-as="json" on-response="_handleResponse" loading="{{loading}}"></iron-ajax>
-        <paper-spinner-lite active="[[loading]]"></paper-spinner-lite>
-        <div hidden$="[[loading]]">
-            <template is="dom-repeat" items="[[currencies]]">
-                <p>[[item.codeName]] - [[item.name]]. Price: [[item.price]]</p>
-            </template>
-        </div>
-        <!-- div for the charts -->
-        <div hidden$="[[loading]]" style="width:100%; max-width: 700px; margin:0 auto">
-            <canvas height="2" width="4" id="canvas"></canvas>
+        <custom-style>
+            <style is="custom-style" include="iron-flex">
+            .horButtons{
+                @apply  --vertical-horizontal;
+            }
+            .charts{
+                @apply  --layout-center;
+            }
+            </style>
+        </custom-style>
+        <style>
+            :host {
+                display: block;
+                font-family: 'Roboto';
+            }
+
+            #ETH {
+                background-color: #026;
+                color: whitesmoke;
+            }
+        </style>
+
+        <div class="layout horizontal wrap">
+            <h2>Crypto Dashboard</h2>
+            <iron-ajax id="coinbase" handle-as="json" on-response="_handleResponse" loading="{{loading}}"></iron-ajax>
+            <paper-spinner-lite active="[[loading]]"></paper-spinner-lite>
+            <div hidden$="[[loading]]">
+                <!-- NAV  -->
+                <template is="dom-repeat" items="[[currencies]]">
+                    <!-- buttons -->
+                    <paper-button class="horButtons" noink data-codename$="[[item.codeName]]" id="[[item.codeName]]" on-click="_getCurrencyHistoricData">
+                        [[item.codeName]]
+                        <br> [[item.name]]. Price: [[item.price]]
+                    </paper-button>
+
+                </template>
+            </div>
+            <!-- div for the charts -->
+            <div hidden$="[[loading]]" class="charts">
+                <canvas height="2" width="4" id="canvas"></canvas>
+            </div>
         </div>
     </template>
 
@@ -68,15 +103,14 @@
                 // this trigger the _getCurrencyData function once the RenderStatus.after
                 // is setup
                 Polymer.RenderStatus.afterNextRender(this, function () {
+                    console.log(this.currencies[0].codeName);
                     this._getCurrencyData();
-                    this._getCurrencyHistoricData('BTC');
+                    this._getCurrencyHistoricData(this.currencies[0].codeName);
+
                 })
+
             }
-            _getCurrencyHistoricData(currency) {
-                var ajax = this.$.coinbase;
-                ajax.url = 'https://www.coinbase.com/api/v2/prices/' + currency + '-USD/historic?period=week';
-                ajax.generateRequest();
-            }
+
 
             // AJAX generate Request
             _getCurrencyData() {
@@ -106,6 +140,32 @@
                     }, this);
 
             }
+
+            // get Historic values: the parameter 
+            // Currency is actually the event
+            _getCurrencyHistoricData(currency) {
+                // this logs the mousevent
+                // console.log(currency);
+                // this access the id hardocded
+                // console.log(currency.target.dataset.codename);
+                // this access the id hardocded
+                // console.log(currency.target.id);
+
+                // console.log(event.target.dataset.codeName);
+
+                // pass the attribute on the event
+                if (currency !== undefined) {
+                    // this access the id hardocded
+                    console.log(currency.target.dataset.codename);
+                    currency = currency.target.id;
+                };
+
+
+                var ajax = this.$.coinbase;
+                ajax.url = 'https://www.coinbase.com/api/v2/prices/' + currency + '-USD/historic?period=week';
+                ajax.generateRequest();
+            }
+
 
             //  ... on-response="_handleResponse"> </iron-ajax>
             _handleResponse(response) {
@@ -149,7 +209,7 @@
 
 
             }
-    
+
             _computeGraph(response) {
                 //<iron-request></iron-request>.url
                 var responseURL = response.url;
@@ -159,9 +219,9 @@
                 var label = [];
                 var price = [];
                 // check time format
-                
+
                 response.response.data.prices.forEach(
-                    function(element) {
+                    function (element) {
                         // label.push(element.time);
                         price.push(element.price);
                         label.push(this._computeDateTime(element.time));
@@ -170,9 +230,9 @@
                 this._generateLineChart(label, price, code);
             }
 
-            _computeDateTime(datestring){
-                if (datestring){
-                    return moment(datestring).startOf('hour').fromNow(); 
+            _computeDateTime(datestring) {
+                if (datestring) {
+                    return moment(datestring).startOf('hour').fromNow();
                     //return moment(datestring, "YY-MM-DDThh:mm:aaZ" ).format('MMMM Do YYYY, h:mm:ss a');
                 }
                 return datestring;
@@ -185,62 +245,59 @@
 
                 // find the canvas on the DOM
                 var ctx = this.$.canvas.getContext('2d');
-
+                var htc = ([
+                    'rgba(255, 99, 132, 0.2)',
+                    'rgba(54, 162, 235, 0.2)'
+                ]);
+                var htcborder = ([
+                    'rgba(255,99,132,1)',
+                    'rgba(54, 162, 235, 1)'
+                ]);
                 // create and instance of chart.js and push data onto the chart
                 this.myLineChart = new Chart(ctx, {
                     type: 'line',
                     data: {
                         labels: label,
-                        datasets: [
-                            {
+                        datasets: [{
                             pointRadius: 0,
                             label: labelName,
                             data: price,
-                            backgroundColor: [
-                                'rgba(255, 99, 132, 0.2)',
-                                'rgba(54, 162, 235, 0.2)',
-                                'rgba(255, 206, 86, 0.2)',
-                                'rgba(75, 192, 192, 0.2)',
-                                'rgba(153, 102, 255, 0.2)',
-                                'rgba(255, 159, 64, 0.2)'
-                            ],
-                            borderWidth: 2,
-                            borderColor: [
-                                'rgba(255,99,132,1)',
-                                'rgba(54, 162, 235, 1)',
-                                'rgba(255, 206, 86, 1)',
-                                'rgba(75, 192, 192, 1)',
-                                'rgba(153, 102, 255, 1)',
-                                'rgba(255, 159, 64, 1)'
-                            ],
-                            borderWidth: 1,
-                    
-
+                            backgroundColor: htc,
+                            borderColor: htcborder,
+                            borderWidth: 2
                         }]
                     },
-                    options:{
-                                animation:false,
-                                tooltips: {
-                                    mode: 'index',
-                                    intersect: false
-                                },
-                                scales: {
-                                    xAxes:[{
-                                        gridLines: {
-                                            display:false
-                                        }
-                                    }],
-                                    yAxes:[{
-                                        gridLines: {
-                                            display:false
-                                        }
-                                    }]
+                    options: {
+                        animation: false,
+                        tooltips: {
+                            mode: 'index',
+                            intersect: false
+                        },
+                        scales: {
+                            xAxes: [{
+                                gridLines: {
+                                    display: false
                                 }
-                            }
+                            }],
+                            yAxes: [{
+                                gridLines: {
+                                    display: false
+                                }
+                            }]
+                        }
+                    }
                 });
             }
         }
 
+        // Testing listeners
+        /*
+        
+                document.getElementById("LTC").onmouseover(function () {
+                    console.log("mousein");
+                });
+
+                */
         window.customElements.define(CryptoApp.is, CryptoApp);
     </script>
 
